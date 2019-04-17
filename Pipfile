@@ -9,10 +9,11 @@ verify_ssl = true
 datetime = "*"
 numpy = "*"
 websocket-client = "*"
-json = "*"
+requests = "*"
+python-dateutil = "*"
 
 [requires]
 python_version = "3.7"
 
 [scripts]
-start = 'python ./execution/app.py'
+start = 'python -B ./app.py'
