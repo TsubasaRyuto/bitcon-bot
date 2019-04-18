@@ -52,8 +52,6 @@ logger.propagate = False
 SYMBOL_BTC_FX = 'FX_BTC_JPY'
 WS_URL = 'wss://ws.lightstream.bitflyer.com/json-rpc'
 CHANNEL_NAME = 'lightning_ticker_FX_BTC_JPY'
-OHLC_PERIOD = 10 # OHLCデータの期間（10秒: 10, 1分: 60)
-OHLC_LENGTH = 20 # OHLCデータの保持数
 RSI_PERIOD = 14
 BASE_POSITION_SIZE = 0.1
 active_positions = 0
@@ -102,7 +100,7 @@ def exec_trading(signal_id, frame):
         else:
             logger.info('Nothing trading')
 
-        time.sleep(7)
+        time.sleep(3)
 
         active_positions = 0
         position_list = position.get_position_info()
@@ -120,7 +118,7 @@ def start_program():
         logger.info('OHLCデータ収集中........')
         time.sleep(1)
     signal.signal(signal.SIGALRM, exec_trading)
-    signal.setitimer(signal.ITIMER_REAL, 1, 10)
+    signal.setitimer(signal.ITIMER_REAL, 1, 5)
 
 def run_websocket():
     ws.keep_running = True
