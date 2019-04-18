@@ -106,7 +106,7 @@ def exec_trading(signal_id, frame):
         position_list = position.get_position_info()
         if position_list:
             position_size_list = [float(position.get('size')) for position in position_list]
-            active_positions = sum(position_size_list)
+            active_positions = round(sum(position_size_list), 3)
         else:
             active_positions = 0
             has_long_position = 0
