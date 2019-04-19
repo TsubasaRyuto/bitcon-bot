@@ -5,16 +5,16 @@
 
 ==========================================================================
 """
-from helper.closing_price_list import ClosingPriceList
+from helper.generate_ohlc import GenerateOHLC
 from helper.logic import Logic
 from action.order import Order
 from action.position import Position
-from indicator.rsi import RSI
-closing_price_list = ClosingPriceList()
+from indicator.cci import CCI
+generate_ohlc = GenerateOHLC()
 logic = Logic()
 order = Order()
 position = Position()
-rsi = RSI()
+cci = CCI()
 
 """
 ==========================================================================
@@ -45,18 +45,18 @@ logger.propagate = False
 """
 ==========================================================================
 
-   Global valiables
+   Global variables
 
 ==========================================================================
 """
 SYMBOL_BTC_FX = 'FX_BTC_JPY'
 WS_URL = 'wss://ws.lightstream.bitflyer.com/json-rpc'
 CHANNEL_NAME = 'lightning_ticker_FX_BTC_JPY'
-RSI_PERIOD = 14
+CCI_PERIOD = 50
 BASE_POSITION_SIZE = 0.1
 active_positions = 0
-now_rsi = None
-previous_rsi = None
+now_cci = None
+previous_cci = None
 has_long_position = False
 has_short_position = False
 
@@ -69,15 +69,15 @@ has_short_position = False
 """
 # 引数はシグナル番号、および現在のスタックフレーム
 def exec_trading(signal_id, frame):
-    global active_positions, previous_rsi, now_rsi, has_short_position, has_long_position
-    cpl = closing_price_list.closing_price_list
-    if len(cpl) == 15:
+    global active_positions, previous_cci, now_cci, has_short_position, has_long_position
+    ohlc_list = generate_ohlc.ohlc_list
+    if len(ohlc_list) == CCI_PERIOD:
         logger.info('---------- Trading decide---------')
-        previous_rsi = now_rsi
-        now_rsi = rsi.rsi_calculater(cpl, RSI_PERIOD)
-        logger.info('Previous RSI: {0}  |  Now RSI: {1}'.format(str(previous_rsi), str(now_rsi)))
-        price = cpl[0]
-        if logic.is_buy_signal(now_rsi, previous_rsi):
+        previous_cci = now_cci
+        now_cci = cci.cci_calculater(ohlc_list, CCI_PERIOD)
+        logger.info('Previous CCI: {0}  |  Now CCI: {1}'.format(str(previous_cci), str(now_cci)))
+        price = ohlc_list[0]['close']
+        if logic.is_buy_signal(now_cci, previous_cci):
             if has_short_position:
                 # Exit
                 logger.info('Exit short position. ActivePosition: {0} Price: {1}'.format(str(active_positions), price))
@@ -87,11 +87,11 @@ def exec_trading(signal_id, frame):
             logger.info('Long entry: Lot: {0}  Price: {1}'.format(str(BASE_POSITION_SIZE), price))
             order.limit_order('BUY', BASE_POSITION_SIZE, price)
             has_long_position = True
-        elif logic.is_sell_signal(now_rsi, previous_rsi):
+        elif logic.is_sell_signal(now_cci, previous_cci):
             if has_long_position:
                 # Exit
                 logger.info('Exit Long position. ActivePosition: {0} Price: {1}'.format(str(active_positions), price))
-                order.market_order('SELL', active_positions)
+                #order.market_order('SELL', active_positions)
                 has_long_position = False
             # Entry
             logger.info('Short entry. Lot: {0}, Price: {1}'.format(str(BASE_POSITION_SIZE), price))
@@ -100,7 +100,7 @@ def exec_trading(signal_id, frame):
         else:
             logger.info('Nothing trading')
 
-        time.sleep(3)
+        time.sleep(8)
 
         active_positions = 0
         position_list = position.get_position_info()
@@ -114,11 +114,11 @@ def exec_trading(signal_id, frame):
         order.cancel_orders()
 
 def start_program():
-    while len(closing_price_list.closing_price_list) != 15:
+    while len(generate_ohlc.ohlc_list) != CCI_PERIOD:
         logger.info('OHLCデータ収集中........')
         time.sleep(1)
     signal.signal(signal.SIGALRM, exec_trading)
-    signal.setitimer(signal.ITIMER_REAL, 1, 5)
+    signal.setitimer(signal.ITIMER_REAL, 1, 10)
 
 def run_websocket():
     ws.keep_running = True
@@ -130,7 +130,7 @@ Below are callback functions of websocket.
 # when get message
 def on_message(self, message):
     acquired_data = json.loads(message)
-    closing_price_list.begin_generate(acquired_data = acquired_data['params']['message'])
+    generate_ohlc.begin_generate(acquired_data['params']['message'], CCI_PERIOD)
 
 # when error occurs
 def on_error(self, error):
