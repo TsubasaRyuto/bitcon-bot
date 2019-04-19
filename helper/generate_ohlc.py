@@ -17,13 +17,13 @@ import dateutil.parser
 
 ==========================================================================
 """
-PERIOD = 10 # データの期間（10秒: 10, 1分: 60)
 class GenerateOHLC:
-    def __init__(self):
+    def __init__(self, period):
         self.ohlc = { 'open': '', 'high': '', 'low': '', 'close': '' }
         self.ohlc_list = []
         self.next_time = 0
         self.first_time = datetime.datetime.now()
+        self.period = period
 
     def begin_generate(self, acquired_data, indicator_period):
         exec_date = self.__toDatetime(acquired_data['timestamp']) + datetime.timedelta(hours=9) # change to JTC
@@ -33,7 +33,7 @@ class GenerateOHLC:
             return
 
         if not self.next_time:
-            self.next_time = self.__get_date_seconds_excluded(self.first_time) + 60 + PERIOD
+            self.next_time = self.__get_date_seconds_excluded(self.first_time) + 60 + self.period
             self.__initialize_ohlc(price)
         elif self.__is_next_candlestick(exec_date):
             self.ohlc_list.insert(0, { 'open': self.ohlc['open'],
@@ -42,7 +42,7 @@ class GenerateOHLC:
                                         'close': self.ohlc['close'] })
             if len(self.ohlc_list) == indicator_period + 1: self.ohlc_list.pop()
             self.__initialize_ohlc(price)
-            self.next_time += PERIOD
+            self.next_time += self.period
         else:
             self.__update_ohlc(price)
 

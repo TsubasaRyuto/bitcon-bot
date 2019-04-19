@@ -10,11 +10,6 @@ from helper.logic import Logic
 from action.order import Order
 from action.position import Position
 from indicator.cci import CCI
-generate_ohlc = GenerateOHLC()
-logic = Logic()
-order = Order()
-position = Position()
-cci = CCI()
 
 """
 ==========================================================================
@@ -52,13 +47,21 @@ logger.propagate = False
 SYMBOL_BTC_FX = 'FX_BTC_JPY'
 WS_URL = 'wss://ws.lightstream.bitflyer.com/json-rpc'
 CHANNEL_NAME = 'lightning_ticker_FX_BTC_JPY'
-CCI_PERIOD = 50
 BASE_POSITION_SIZE = 0.1
+CCI_PERIOD = 50
+PERIOD = 60
 active_positions = 0
 now_cci = None
 previous_cci = None
 has_long_position = False
 has_short_position = False
+provisional_positions = 0
+# class instance
+generate_ohlc = GenerateOHLC(PERIOD)
+logic = Logic()
+order = Order()
+position = Position()
+cci = CCI()
 
 """
 ==========================================================================
@@ -69,7 +72,7 @@ has_short_position = False
 """
 # 引数はシグナル番号、および現在のスタックフレーム
 def exec_trading(signal_id, frame):
-    global active_positions, previous_cci, now_cci, has_short_position, has_long_position
+    global active_positions, previous_cci, now_cci, has_short_position, has_long_position, provisional_positions
     ohlc_list = generate_ohlc.ohlc_list
     if len(ohlc_list) == CCI_PERIOD:
         logger.info('---------- Trading decide---------')
@@ -78,37 +81,58 @@ def exec_trading(signal_id, frame):
         logger.info('Previous CCI: {0}  |  Now CCI: {1}'.format(str(previous_cci), str(now_cci)))
         price = ohlc_list[0]['close']
         if logic.is_buy_signal(now_cci, previous_cci):
-            if has_short_position:
-                # Exit
-                logger.info('Exit short position. ActivePosition: {0} Price: {1}'.format(str(active_positions), price))
+            if active_positions > BASE_POSITION_SIZE * 6 and has_long_position:
+                # Force exit
+                logger.info('Forc exit Long position. ActivePosition: {0} Price: {1}'.format(str(active_positions), price))
+                order.market_order('SELL', active_positions)
+                has_long_position = False
+                provisional_positions = 0
+            else:
+                if has_short_position:
+                    # Exit
+                    logger.info('Exit short position. Active positions: {0} Price: {1}'.format(str(active_positions), price))
+                    order.market_order('BUY', active_positions)
+                    has_short_position = False
+                    provisional_positions = 0
+                # Entry
+                logger.info('Long entry: Lot: {0}  Price: {1}'.format(str(BASE_POSITION_SIZE), price))
+                order.limit_order('BUY', BASE_POSITION_SIZE, price)
+                has_long_position = True
+                provisional_positions += BASE_POSITION_SIZE
+        elif logic.is_sell_signal(now_cci, previous_cci):
+            if active_positions > BASE_POSITION_SIZE * 6 and has_short_position:
+                # Force exit
+                logger.info('Forc exit short position. Active positions: {0} Price: {1}'.format(str(active_positions), price))
                 order.market_order('BUY', active_positions)
                 has_short_position = False
-            # Entry
-            logger.info('Long entry: Lot: {0}  Price: {1}'.format(str(BASE_POSITION_SIZE), price))
-            order.limit_order('BUY', BASE_POSITION_SIZE, price)
-            has_long_position = True
-        elif logic.is_sell_signal(now_cci, previous_cci):
-            if has_long_position:
-                # Exit
-                logger.info('Exit Long position. ActivePosition: {0} Price: {1}'.format(str(active_positions), price))
-                #order.market_order('SELL', active_positions)
-                has_long_position = False
-            # Entry
-            logger.info('Short entry. Lot: {0}, Price: {1}'.format(str(BASE_POSITION_SIZE), price))
-            order.limit_order('SELL', BASE_POSITION_SIZE, price)
-            has_short_position = True
+                provisional_positions = 0
+            else:
+                if has_long_position:
+                    # Exit
+                    logger.info('Exit Long position. ActivePosition: {0} Price: {1}'.format(str(active_positions), price))
+                    order.market_order('SELL', active_positions)
+                    has_long_position = False
+                    provisional_positions = 0
+                # Entry
+                logger.info('Short entry. Lot: {0}, Price: {1}'.format(str(BASE_POSITION_SIZE), price))
+                order.limit_order('SELL', BASE_POSITION_SIZE, price)
+                has_short_position = True
+                provisional_positions += BASE_POSITION_SIZE
         else:
             logger.info('Nothing trading')
 
-        time.sleep(8)
+        time.sleep(30)
 
         active_positions = 0
         position_list = position.get_position_info()
         if position_list:
             position_size_list = [float(position.get('size')) for position in position_list]
-            active_positions = round(sum(position_size_list), 3)
+            active_positions = sum(position_size_list)
+            if active_positions >= provisional_positions:
+                active_positions = provisional_positions
         else:
             active_positions = 0
+            provisional_position_size = 0
             has_long_position = 0
             has_short_position = 0
         order.cancel_orders()
@@ -118,7 +142,7 @@ def start_program():
         logger.info('OHLCデータ収集中........')
         time.sleep(1)
     signal.signal(signal.SIGALRM, exec_trading)
-    signal.setitimer(signal.ITIMER_REAL, 1, 10)
+    signal.setitimer(signal.ITIMER_REAL, 1, PERIOD)
 
 def run_websocket():
     ws.keep_running = True
