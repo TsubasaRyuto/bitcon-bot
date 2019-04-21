@@ -7,7 +7,7 @@ import hmac
 import hashlib
 
 class Position:
-    path = '/v1/me/getpositions?product_code=FX_BTC_JPY';
+    path = '/v1/me/getpositions?product_code=FX_BTC_JPY'
     method = 'GET'
     def get_position_info(self):
         results = None
