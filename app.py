@@ -26,6 +26,7 @@ from time import sleep
 import numpy as np
 import threading
 import signal
+from decimal import *
 
 # -------------------------------- Setting log ---------------------------------
 from logging import getLogger, StreamHandler, DEBUG
@@ -47,7 +48,7 @@ logger.propagate = False
 SYMBOL_BTC_FX = 'FX_BTC_JPY'
 WS_URL = 'wss://ws.lightstream.bitflyer.com/json-rpc'
 CHANNEL_NAME = 'lightning_ticker_FX_BTC_JPY'
-BASE_POSITION_SIZE = 0.1
+BASE_POSITION_SIZE = Decimal('0.07')
 CCI_PERIOD = 50
 PERIOD = 60
 active_positions = 0
@@ -126,10 +127,8 @@ def exec_trading(signal_id, frame):
         active_positions = 0
         position_list = position.get_position_info()
         if position_list:
-            position_size_list = [float(position.get('size')) for position in position_list]
+            position_size_list = [Decimal(str(position.get('size'))) for position in position_list]
             active_positions = sum(position_size_list)
-            if active_positions >= provisional_positions:
-                active_positions = provisional_positions
         else:
             active_positions = 0
             provisional_position_size = 0
@@ -144,28 +143,33 @@ def start_program():
     signal.signal(signal.SIGALRM, exec_trading)
     signal.setitimer(signal.ITIMER_REAL, 1, PERIOD)
 
-def run_websocket():
-    ws.keep_running = True
-    ws.run_forever()
+def run_websocket(ws):
+    while True:
+        try:
+            ws.keep_running = True
+            ws.run_forever()
+        except Exception as e:
+            logger.error(e)
+        time.sleep(1)
 
 """
 Below are callback functions of websocket.
 """
 # when get message
-def on_message(self, message):
+def on_message(ws, message):
     acquired_data = json.loads(message)
     generate_ohlc.begin_generate(acquired_data['params']['message'], CCI_PERIOD)
 
 # when error occurs
-def on_error(self, error):
+def on_error(ws, error):
     logger.error(error)
 
 # when websocket closed.
-def on_close(self):
+def on_close(ws):
     logger.info('Disconnected websocket')
 
 # when websocket opened.
-def on_open(self):
+def on_open(ws):
     logger.info('Connected websocket')
     ws.send(json.dumps({ 'method': 'subscribe', 'params': { 'channel': CHANNEL_NAME } }))
 
@@ -176,8 +180,9 @@ if __name__ == '__main__':
     logger.info('LOT      : ' + str(BASE_POSITION_SIZE))
     logger.info('========================================')
 
-    ws = websocket.WebSocketApp(WS_URL, on_open = on_open, on_message = on_message, on_error = on_error, on_close = on_close)
-    t1 = threading.Thread(target = run_websocket)
+    ws = websocket.WebSocketApp(WS_URL, on_message = on_message, on_error = on_error, on_close = on_close)
+    ws.on_open = on_open
+    t1 = threading.Thread(target=run_websocket, args=(ws,))
 
     t1.start()
     start_program()
