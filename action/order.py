@@ -8,6 +8,16 @@ import requests
 import hmac
 import hashlib
 
+# -------------------------------- Setting log ---------------------------------
+from logging import getLogger, StreamHandler, DEBUG
+logger = getLogger(__name__)
+handler = StreamHandler()
+handler.setLevel(DEBUG)
+logger.setLevel(DEBUG)
+logger.addHandler(handler)
+logger.propagate = False
+# ------------------------------------------------------------------------------
+
 class Order:
     product_code = 'FX_BTC_JPY'
     base_url = 'https://api.bitflyer.jp'
@@ -38,7 +48,7 @@ class Order:
             )
             acquired_data = request_data.json()
         except Exception as e:
-            return 'Error mssage: {0}'.format(str(e))
+            logger.error('Error mssage: {0}'.format(str(e)))
         else:
             return acquired_data
 
@@ -68,7 +78,7 @@ class Order:
             )
             acquired_data = request_data.json()
         except Exception as e:
-            return 'Error mssage: {0}'.format(str(e))
+            logger.error('Error mssage: {0}'.format(str(e)))
         else:
             return acquired_data
 
@@ -93,6 +103,6 @@ class Order:
                 }
             )
         except Exception as e:
-            return 'Error mssage: {0}'.format(str(e))
+            logger.error('Error mssage: {0}'.format(str(e)))
         else:
             return request_data
